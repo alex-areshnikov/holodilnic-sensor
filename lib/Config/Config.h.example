@@ -1,0 +1,10 @@
+#define WIFI_SSID   "wi-fi ssid"
+#define WIFI_PWD    "wi-fi password"
+
+#define MQTT_SERVER	"MQTT server IP address"
+#define MQTT_SERVER_PORT  1883
+
+#define SENSOR_TOP_DATA_PIN D1
+#define SENSOR_BOTTOM_DATA_PIN D2
+
+#define MQTT_HOLODILNIC_TOPIC	"MQTT report topic"
