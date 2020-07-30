@@ -10,6 +10,8 @@ DHTesp dhtBottom;
 WiFiClient esp_client;
 PubSubClient mqtt_client(esp_client);
 
+float humidityTop, temperatureTop, humidityBottom, temperatureBottom;
+
 void mqttReconnect() {
   while (!mqtt_client.connected()) {
     Serial.print("Attempting MQTT connection...");
@@ -41,6 +43,8 @@ void processMqtt() {
 
 void initializeBoard() {
   Serial.begin(115200);  
+  pinMode(FAN_CONTROL_PIN, OUTPUT);
+  digitalWrite(FAN_CONTROL_PIN, LOW);
 }
 
 void initializeSensor() {
@@ -73,6 +77,25 @@ void initializeWifi() {
 void initializeMqtt() {
   mqtt_client.setServer(MQTT_SERVER, MQTT_SERVER_PORT);
 }
+
+void processSensors() {
+  humidityTop = dhtTop.getHumidity();
+  temperatureTop = dhtTop.getTemperature();
+  humidityBottom = dhtBottom.getHumidity();
+  temperatureBottom = dhtBottom.getTemperature();
+}
+
+void reportSensorsValues() {
+  char buffer[64];
+  sprintf(buffer, "{\"humidity_top\":%.2f,\"temp_top\":%.2f,\"humidity_bottom\":%.2f,\"temp_bottom\":%.2f}", humidityTop, temperatureTop, humidityBottom, temperatureBottom);  
+  //Serial.println(buffer);
+  mqtt_client.publish(MQTT_HOLODILNIC_TOPIC, buffer);
+}
+
+void processFan() {
+  uint8_t fanState = ((((humidityTop + humidityBottom) / 2) > FAN_HUMIDITY_THRESHOLD) ? LOW : HIGH);
+  digitalWrite(FAN_CONTROL_PIN, fanState);
+}
  
 void setup() {
   initializeBoard();
@@ -83,20 +106,10 @@ void setup() {
 }
 
 void loop() {
-  float humidityTop = dhtTop.getHumidity();
-  float temperatureTop = dhtTop.getTemperature();
-
-  float humidityBottom = dhtBottom.getHumidity();
-  float temperatureBottom = dhtBottom.getTemperature();
-  
-  char buffer[64];
-
+  processSensors();
+  reportSensorsValues();
+  processFan();
   processMqtt();
-
-  sprintf(buffer, "{\"humidity_top\":%.2f,\"temp_top\":%.2f,\"humidity_bottom\":%.2f,\"temp_bottom\":%.2f}", humidityTop, temperatureTop, humidityBottom, temperatureBottom);  
-
-  //Serial.println(buffer);
-  mqtt_client.publish(MQTT_HOLODILNIC_TOPIC, buffer);
 
   delay(5000);
 }
