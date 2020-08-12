@@ -18,7 +18,11 @@ PubSubClient mqttClient(esp_client);
 
 float humidityTop, temperatureTop, humidityBottom, temperatureBottom;
 String fanOverride = "";
-uint8_t counter = 0;
+
+uint8_t counter_1 = 0;
+uint16_t counter_2 = 0;
+
+uint8_t fanStateCurrent = LOW;
 
 void mqttReconnect() {
   while (!mqttClient.connected()) {
@@ -31,7 +35,7 @@ void mqttReconnect() {
     // Attempt to connect
     if (mqttClient.connect(clientId.c_str())) {
       Serial.println("connected");
-      mqttClient.subscribe(MQTT_HOLODILNIC_FAN_TOPIC);
+      //mqttClient.subscribe(MQTT_HOLODILNIC_FAN_TOPIC);
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
@@ -43,14 +47,7 @@ void mqttReconnect() {
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {  
-  // char buffer[64];
-  // sprintf(buffer, "topic %s, payload %s", topic, (char*)payload);  
-  // mqttClient.publish(MQTT_HOLODILNIC_LOGS_TOPIC, buffer);
-  // mqttClient.loop();
-
-  // if(String(topic) == MQTT_HOLODILNIC_FAN_TOPIC) {        
-  //    fanOverride = String(((char*)payload)[0]);            
-  // }
+  // Do nothing
 }
 
 void processMqtt() {
@@ -61,10 +58,18 @@ void processMqtt() {
   mqttClient.loop();
 }
 
+void mqttLog(String msg) {
+  char bufffer[64];
+  msg.toCharArray(bufffer, sizeof(bufffer));
+
+  mqttClient.publish(MQTT_HOLODILNIC_LOGS_TOPIC, bufffer);
+  mqttClient.loop();
+}
+
 void initializeBoard() {
   Serial.begin(115200);  
   pinMode(FAN_CONTROL_PIN, OUTPUT);
-  digitalWrite(FAN_CONTROL_PIN, LOW);
+  digitalWrite(FAN_CONTROL_PIN, fanStateCurrent);
 }
 
 void initializeSensor() {
@@ -161,11 +166,27 @@ void reportSensorsValues() {
   sprintf(buffer, "{\"humidity_top\":%.2f,\"temp_top\":%.2f,\"humidity_bottom\":%.2f,\"temp_bottom\":%.2f}", humidityTop, temperatureTop, humidityBottom, temperatureBottom);  
   //Serial.println(buffer);
   mqttClient.publish(MQTT_HOLODILNIC_TOPIC, buffer);
+  mqttClient.loop();
 }
 
 void processFan() {
-  uint8_t fanState = ((((humidityTop + humidityBottom) / 2) > FAN_HUMIDITY_THRESHOLD) ? LOW : HIGH);
-  digitalWrite(FAN_CONTROL_PIN, fanState);
+  uint8_t fanState;
+
+  if(counter_2-- == 0) {
+    counter_2 = FIFTEEN_MIN_AT_100_MS_DELAY;
+    return;
+  } else if(counter_2 <= FIVE_MIN_AT_100_MS_DELAY) {
+    fanState = LOW;
+  } else {
+    fanState = HIGH;
+  }
+
+  if(fanState != fanStateCurrent) {
+    String fanStateStr = (fanState == HIGH ? "high" : "low");
+    fanStateCurrent = fanState;
+    digitalWrite(FAN_CONTROL_PIN, fanState);    
+    mqttLog("Fan set to " + fanStateStr);
+  }
 }
 
 void processOTA() {
@@ -184,13 +205,13 @@ void setup() {
 
 void loop() {
   processMqtt();
+  processFan();
 
-  if(counter-- <= 0) {
-    counter = 50;
+  if(counter_1-- == 0) {
+    counter_1 = FIVE_SEC_AT_100_MS_DELAY;
     processSensors();
     reportSensorsValues();
 
-    processFan();  
     processOTA();
   }
 
