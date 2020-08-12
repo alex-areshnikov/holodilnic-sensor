@@ -13,4 +13,6 @@
 
 #define FAN_HUMIDITY_THRESHOLD  50.0
 
-#define MQTT_HOLODILNIC_TOPIC	"MQTT report topic"
+#define MQTT_HOLODILNIC_TOPIC	    "MQTT report topic"
+#define MQTT_HOLODILNIC_FAN_TOPIC	"MQTT fan topic"
+#define MQTT_HOLODILNIC_LOGS_TOPIC	"MQTT logs topic"

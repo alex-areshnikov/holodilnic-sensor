@@ -14,12 +14,14 @@ DHTesp dhtTop;
 DHTesp dhtBottom;
 
 WiFiClient esp_client;
-PubSubClient mqtt_client(esp_client);
+PubSubClient mqttClient(esp_client);
 
 float humidityTop, temperatureTop, humidityBottom, temperatureBottom;
+String fanOverride = "";
+uint8_t counter = 0;
 
 void mqttReconnect() {
-  while (!mqtt_client.connected()) {
+  while (!mqttClient.connected()) {
     Serial.print("Attempting MQTT connection...");
     
     // Create a random client ID
@@ -27,11 +29,12 @@ void mqttReconnect() {
     clientId += String(random(0xffff), HEX);
     
     // Attempt to connect
-    if (mqtt_client.connect(clientId.c_str())) {
+    if (mqttClient.connect(clientId.c_str())) {
       Serial.println("connected");
+      mqttClient.subscribe(MQTT_HOLODILNIC_FAN_TOPIC);
     } else {
       Serial.print("failed, rc=");
-      Serial.print(mqtt_client.state());
+      Serial.print(mqttClient.state());
       Serial.println(" try again in 5 seconds");
       
       delay(5000);
@@ -39,12 +42,23 @@ void mqttReconnect() {
   }
 }
 
+void mqttCallback(char* topic, byte* payload, unsigned int length) {  
+  // char buffer[64];
+  // sprintf(buffer, "topic %s, payload %s", topic, (char*)payload);  
+  // mqttClient.publish(MQTT_HOLODILNIC_LOGS_TOPIC, buffer);
+  // mqttClient.loop();
+
+  // if(String(topic) == MQTT_HOLODILNIC_FAN_TOPIC) {        
+  //    fanOverride = String(((char*)payload)[0]);            
+  // }
+}
+
 void processMqtt() {
-  if (!mqtt_client.connected()) {
+  if (!mqttClient.connected()) {
     mqttReconnect();
   }
   
-  mqtt_client.loop();
+  mqttClient.loop();
 }
 
 void initializeBoard() {
@@ -81,7 +95,8 @@ void initializeWifi() {
 }
 
 void initializeMqtt() {
-  mqtt_client.setServer(MQTT_SERVER, MQTT_SERVER_PORT);
+  mqttClient.setServer(MQTT_SERVER, MQTT_SERVER_PORT);
+  mqttClient.setCallback(mqttCallback); 
 }
 
 void initializeOTA() {
@@ -145,7 +160,7 @@ void reportSensorsValues() {
   char buffer[64];
   sprintf(buffer, "{\"humidity_top\":%.2f,\"temp_top\":%.2f,\"humidity_bottom\":%.2f,\"temp_bottom\":%.2f}", humidityTop, temperatureTop, humidityBottom, temperatureBottom);  
   //Serial.println(buffer);
-  mqtt_client.publish(MQTT_HOLODILNIC_TOPIC, buffer);
+  mqttClient.publish(MQTT_HOLODILNIC_TOPIC, buffer);
 }
 
 void processFan() {
@@ -168,12 +183,16 @@ void setup() {
 }
 
 void loop() {
-  processSensors();
-  reportSensorsValues();
-
-  processFan();
   processMqtt();
-  processOTA();
 
-  delay(5000);
+  if(counter-- <= 0) {
+    counter = 50;
+    processSensors();
+    reportSensorsValues();
+
+    processFan();  
+    processOTA();
+  }
+
+  delay(100);
 }
