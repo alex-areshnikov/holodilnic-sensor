@@ -196,6 +196,13 @@ void processSensors() {
   temperatureBottom = dhtBottom.getTemperature();
 }
 
+void validateReadings() {
+  if(isnan(humidityTop) || isnan(temperatureTop) || isnan(humidityBottom) || isnan(temperatureBottom)) {
+    mqttLog("Bad readings. NaN detectd. Restarting...");
+    ESP.restart();
+  }
+}
+
 void reportSensorsValues() {
   char buffer[64];
   sprintf(buffer, "{\"humidity_top\":%.2f,\"temp_top\":%.2f,\"humidity_bottom\":%.2f,\"temp_bottom\":%.2f}", humidityTop, temperatureTop, humidityBottom, temperatureBottom);  
@@ -238,6 +245,8 @@ void setup() {
   timeClient.begin();
 
   initializeOTA();
+
+  mqttLog("Holodilnic initialized.");
 }
 
 void loop() {
@@ -245,9 +254,10 @@ void loop() {
   processFan();
 
   if(counter_1-- == 0) {
-    counter_1 = FIVE_SEC_AT_100_MS_DELAY;
+    counter_1 = FIVE_SEC_AT_100_MS_DELAY * 2;
     processSensors();
     reportSensorsValues();
+    validateReadings();
 
     processOTA();
   }
